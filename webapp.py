@@ -128,58 +128,37 @@ def add_new_post(title, content, img_url=""):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 🔥 終極修復：直接把按鈕「釘」在螢幕左上角 (Fixed Position)
-# 這樣不管 Header 怎麼變，按鈕都一定會在
+# 🔥 最終修正版：保留 Header (確保左側按鈕存在)，只挖掉右邊選單
 st.markdown("""
     <style>
-        /* 1. 隱藏右上角的選單 (Share, Star, GitHub 等) */
+        /* 1. 徹底隱藏右邊的選單 (Hamburger Menu, Share, GitHub) */
         [data-testid="stToolbar"] {
-            visibility: hidden !important;
             display: none !important;
+            visibility: hidden !important;
         }
-        
-        /* 2. 隱藏最上面的彩色列 */
+
+        /* 2. 徹底隱藏上面的彩色列 */
         [data-testid="stDecoration"] {
-            visibility: hidden !important;
             display: none !important;
+            visibility: hidden !important;
         }
-        
+
         /* 3. 隱藏頁尾 */
         footer {
-            visibility: hidden !important;
             display: none !important;
+            visibility: hidden !important;
         }
         
-        /* 4. 讓 Header 透明，但保留空間給按鈕 */
-        [data-testid="stHeader"] {
+        /* 4. 關鍵：我們「不隱藏」header，也不把它變透明到點不到
+              我們只把它背景變透明，這樣左上角的按鈕 (它就在 header 裡面) 
+              就會自然出現，這是最保險的做法。 */
+        header {
             background-color: transparent !important;
-            z-index: 1 !important;
         }
         
-        /* 5. 核彈級修復：強制把「展開側邊欄」按鈕釘在左上角 */
+        /* 5. 確保左上角按鈕顏色明顯 (怕背景是黑色或白色看不見) */
         [data-testid="stSidebarCollapsedControl"] {
-            display: block !important;
-            visibility: visible !important;
-            position: fixed !important;  /* 脫離 Header，直接釘在視窗上 */
-            top: 15px !important;
-            left: 15px !important;
-            z-index: 1000005 !important; /* 確保它在所有東西最上面 */
-            
-            /* 按鈕樣式優化 */
-            background-color: rgba(255, 255, 255, 0.5); /* 半透明白色底 */
-            border-radius: 8px;
-            padding: 4px;
-            color: #333333 !important; /* 箭頭顏色 */
-            border: 1px solid rgba(0,0,0,0.1);
-        }
-        
-        /* 針對手機版特別調整 */
-        @media (max-width: 640px) {
-            [data-testid="stSidebarCollapsedControl"] {
-                top: 10px !important;
-                left: 10px !important;
-                background-color: rgba(255, 255, 255, 0.8); /* 手機版底色深一點比較明顯 */
-            }
+            color: inherit !important; 
         }
     </style>
 """, unsafe_allow_html=True)
