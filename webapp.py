@@ -128,7 +128,8 @@ def add_new_post(title, content, img_url=""):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 🔥 手機版修復：強制顯示側邊欄按鈕，並設為顯眼顏色
+# 🔥 終極修復：直接把按鈕「釘」在螢幕左上角 (Fixed Position)
+# 這樣不管 Header 怎麼變，按鈕都一定會在
 st.markdown("""
     <style>
         /* 1. 隱藏右上角的選單 (Share, Star, GitHub 等) */
@@ -149,20 +150,36 @@ st.markdown("""
             display: none !important;
         }
         
-        /* 4. 關鍵修復：確保 header 是透明的，但「不會擋住」按鈕 */
-        header {
+        /* 4. 讓 Header 透明，但保留空間給按鈕 */
+        [data-testid="stHeader"] {
             background-color: transparent !important;
+            z-index: 1 !important;
         }
         
-        /* 5. 強制顯示左上角的「展開側邊欄」按鈕 (箭頭) */
+        /* 5. 核彈級修復：強制把「展開側邊欄」按鈕釘在左上角 */
         [data-testid="stSidebarCollapsedControl"] {
             display: block !important;
             visibility: visible !important;
-            color: #FFFFFF !important;  /* 強制設為白色 */
-            z-index: 999999 !important; /* 確保它浮在最上面 */
-            background-color: rgba(128, 128, 128, 0.2); /* 加一點點灰色底，怕背景太白看不到 */
-            border-radius: 50%;
-            padding: 5px;
+            position: fixed !important;  /* 脫離 Header，直接釘在視窗上 */
+            top: 15px !important;
+            left: 15px !important;
+            z-index: 1000005 !important; /* 確保它在所有東西最上面 */
+            
+            /* 按鈕樣式優化 */
+            background-color: rgba(255, 255, 255, 0.5); /* 半透明白色底 */
+            border-radius: 8px;
+            padding: 4px;
+            color: #333333 !important; /* 箭頭顏色 */
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        
+        /* 針對手機版特別調整 */
+        @media (max-width: 640px) {
+            [data-testid="stSidebarCollapsedControl"] {
+                top: 10px !important;
+                left: 10px !important;
+                background-color: rgba(255, 255, 255, 0.8); /* 手機版底色深一點比較明顯 */
+            }
         }
     </style>
 """, unsafe_allow_html=True)
