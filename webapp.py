@@ -25,7 +25,7 @@ def get_db_connection():
 
 def upload_image_to_drive(image_file):
     """
-    單張圖片上傳邏輯
+    (除錯版) 上傳圖片到 Google Drive，失敗時會顯示詳細錯誤原因
     """
     if not image_file:
         return ""
@@ -48,27 +48,44 @@ def upload_image_to_drive(image_file):
             headers=headers,
             files=files
         )
+        
+        # 🔥🔥🔥 除錯重點：檢查 HTTP 狀態碼 🔥🔥🔥
+        if response.status_code != 200:
+            st.error(f"❌ 上傳失敗 (HTTP {response.status_code})")
+            # 嘗試顯示 Google 回傳的錯誤訊息
+            try:
+                st.json(response.json())
+            except:
+                st.write(response.text)
+            return ""
+
         file_id = response.json().get('id')
         
         if not file_id:
+            st.error("❌ 上傳失敗：無法取得檔案 ID")
             return ""
 
         # 3. 設定公開權限
-        requests.post(
+        perm_res = requests.post(
             f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
             headers=headers,
             json={"role": "reader", "type": "anyone"}
         )
         
+        # 檢查權限設定是否成功
+        if perm_res.status_code != 200:
+            st.warning(f"⚠️ 上傳成功但權限設定失敗 (HTTP {perm_res.status_code})")
+            st.json(perm_res.json())
+
         # 4. 回傳連結
         return f"https://drive.google.com/uc?export=view&id={file_id}"
         
     except Exception as e:
-        st.error(f"圖片上傳失敗: {e}")
+        st.error(f"❌ 程式執行錯誤: {e}")
         return ""
 
 # ==========================================
-# 2. 核心功能函數
+# 2. 核心功能函數 (無變動)
 # ==========================================
 
 def get_data_as_df(worksheet_name):
@@ -134,9 +151,6 @@ def add_days_to_user(username, days=30):
             current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
         except:
             current_expiry = datetime.now().date()
-        
-        # 邏輯：從「目前到期日」和「今天」之中選比較晚的那個開始加
-        # 這樣如果是過期很久的會員，會從今天開始算，不會被吃掉天數
         start_date = max(current_expiry, datetime.now().date())
         new_expiry = start_date + timedelta(days=days)
         new_expiry_str = new_expiry.strftime("%Y-%m-%d")
@@ -277,8 +291,6 @@ else:
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
                 st.write("👇 選擇要加值的天數：")
-                
-                # 🔥 修改處：改成 4 個按鈕一排 (包含 +1 天)
                 btn_col0, btn_col1, btn_col2, btn_col3 = st.columns(4)
                 
                 with btn_col0:
