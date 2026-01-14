@@ -1,94 +1,159 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # ==========================================
-# 1. 模擬資料庫
+# 1. 雲端資料庫設定 & 連線功能
 # ==========================================
-if 'db_users' not in st.session_state:
-    st.session_state['db_users'] = {
-        # 🔥 你的管理員帳號 (已更新)
-        'BOSS07260304': {'pwd': '04036270BOSS', 'expiry': '2099-12-31'},
-        
-        # 測試用的會員 (不需要可以刪除或留著測試)
-        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},
-        'user':  {'pwd': '123',   'expiry': '2023-01-01'}
-    }
 
-if 'db_posts' not in st.session_state:
-    st.session_state['db_posts'] = [
-        {
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "title": "【盤後重點】外資今日大買百億，權證主力動向解析",
-            "content": "今日台積電(2330)出現明顯隔日沖買盤，主力「元大-向上」大舉敲進...",
-            "img": None
-        }
-    ]
-
+# 你的金鑰檔案路徑 (請確保檔案真的在這個位置)
+JSON_PATH = r"C:\Users\andyl\Downloads\KEY.json"
+# 你的試算表名稱
+SHEET_NAME = '會員系統資料庫'
 # 你的歐付寶收款連結
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
+@st.cache_resource
+def get_db_connection():
+    """連線到 Google Sheets (使用快取，避免每次操作都重新連線)"""
+    scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(JSON_PATH, scope)
+    client = gspread.authorize(creds)
+    sheet = client.open(SHEET_NAME)
+    return sheet
+
 # ==========================================
-# 2. 核心功能函數
+# 2. 核心功能函數 (讀寫雲端版)
 # ==========================================
+
+def get_data_as_df(worksheet_name):
+    """讀取某個分頁的所有資料轉成 DataFrame"""
+    try:
+        sh = get_db_connection()
+        ws = sh.worksheet(worksheet_name)
+        data = ws.get_all_records()
+        return pd.DataFrame(data)
+    except Exception as e:
+        return pd.DataFrame()
+
 def check_login(username, password):
-    users = st.session_state['db_users']
-    if username in users and users[username]['pwd'] == password:
+    """檢查登入"""
+    # 🔥 超級管理員通道 (寫死在程式碼最安全)
+    if username == 'BOSS07260304' and password == '04036270BOSS':
         return True
+    
+    # 一般會員：去雲端查
+    df = get_data_as_df('users')
+    if df.empty: return False
+    
+    # 搜尋帳號 (強制轉字串比對)
+    user_row = df[df['username'].astype(str) == str(username)]
+    
+    if not user_row.empty:
+        stored_pwd = str(user_row.iloc[0]['password'])
+        if stored_pwd == str(password):
+            return True
     return False
 
 def register_user(username, password):
-    """註冊新用戶 (預設為過期狀態)"""
-    users = st.session_state['db_users']
-    if username in users:
+    """註冊新用戶"""
+    df = get_data_as_df('users')
+    
+    # 檢查是否重複
+    if not df.empty and str(username) in df['username'].astype(str).values:
         return False, "帳號已存在"
     
-    # 設定昨天的日期 (代表一註冊就是過期，需要付款)
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-    users[username] = {'pwd': password, 'expiry': yesterday}
-    return True, "註冊成功！請登入並付款開通。"
+    try:
+        sh = get_db_connection()
+        ws = sh.worksheet('users')
+        # 預設過期日 (昨天)
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        # 寫入 [帳號, 密碼, 到期日]
+        ws.append_row([str(username), str(password), yesterday])
+        return True, "註冊成功！資料已寫入雲端，請登入並付款開通。"
+    except Exception as e:
+        return False, f"連線錯誤: {e}"
 
 def check_subscription(username):
-    # 🔥 管理員判定：只要是這個帳號就是無敵
-    if username == 'BOSS07260304': return True, "永久會員"
+    """檢查會員效期"""
+    if username == 'BOSS07260304': return True, "永久會員 (管理員)"
     
-    user_info = st.session_state['db_users'][username]
-    expiry_str = user_info['expiry']
-    expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-    today = datetime.now().date()
+    df = get_data_as_df('users')
+    if df.empty: return False, "資料庫讀取失敗"
     
-    if expiry_date >= today:
-        return True, expiry_str
-    else:
-        return False, expiry_str
+    user_row = df[df['username'].astype(str) == str(username)]
+    
+    if not user_row.empty:
+        expiry_str = str(user_row.iloc[0]['expiry'])
+        try:
+            expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+            if expiry_date >= datetime.now().date():
+                return True, expiry_str
+            else:
+                return False, expiry_str
+        except:
+            return False, "日期格式異常"
+    return False, "無此帳號"
 
 def add_days_to_user(username, days=30):
-    if username in st.session_state['db_users']:
-        user_info = st.session_state['db_users'][username]
-        current_expiry = datetime.strptime(user_info['expiry'], "%Y-%m-%d").date()
-        today = datetime.now().date()
+    """幫會員充值 (直接修改儲存格)"""
+    try:
+        sh = get_db_connection()
+        ws = sh.worksheet('users')
         
-        start_date = max(current_expiry, today)
+        # 尋找該帳號在哪一列
+        cell = ws.find(str(username))
+        if not cell: return False
+        
+        row_num = cell.row
+        # 取得目前到期日 (第3欄)
+        current_expiry_str = ws.cell(row_num, 3).value
+        
+        try:
+            current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
+        except:
+            current_expiry = datetime.now().date()
+            
+        # 計算新日期
+        start_date = max(current_expiry, datetime.now().date())
         new_expiry = start_date + timedelta(days=days)
+        new_expiry_str = new_expiry.strftime("%Y-%m-%d")
         
-        st.session_state['db_users'][username]['expiry'] = new_expiry.strftime("%Y-%m-%d")
+        # 更新儲存格
+        ws.update_cell(row_num, 3, new_expiry_str)
         return True
-    return False
+    except Exception as e:
+        st.error(f"充值失敗: {e}")
+        return False
+
+def add_new_post(title, content, img_url=""):
+    """新增文章到雲端"""
+    try:
+        sh = get_db_connection()
+        ws = sh.worksheet('posts')
+        date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        # 寫入 [日期, 標題, 內容, 圖片] (新文章在最下面，顯示時我們再反轉)
+        ws.append_row([date_str, title, content, img_url])
+        return True
+    except Exception as e:
+        st.error(f"發文失敗: {e}")
+        return False
 
 # ==========================================
 # 3. 網站介面 (UI)
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 隱藏選單
-hide_streamlit_style = """
+# 隱藏選單樣式
+st.markdown("""
 <style>
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
 </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # --- 側邊欄：登入/註冊系統 ---
 with st.sidebar:
@@ -174,18 +239,15 @@ else:
             with st.form("post_form"):
                 new_title = st.text_input("文章標題")
                 new_content = st.text_area("文章內容 (支援 Markdown)", height=200)
-                new_img = st.file_uploader("上傳圖片 (選填)", type=['png', 'jpg', 'jpeg'])
+                # 暫時不支援真實圖片上傳到 Drive，這裡先用文字連結代替，或留空
+                new_img = st.text_input("圖片連結 (選填)") 
                 submitted = st.form_submit_button("發布文章")
                 
                 if submitted:
-                    post_data = {
-                        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
-                        "title": new_title,
-                        "content": new_content,
-                        "img": new_img
-                    }
-                    st.session_state['db_posts'].insert(0, post_data)
-                    st.success("文章發布成功！")
+                    if add_new_post(new_title, new_content, new_img):
+                        st.success("文章已發布到雲端！")
+                    else:
+                        st.error("發布失敗，請檢查網路或權限。")
         
         with tab2:
             st.info("收到歐付寶通知後，請在此輸入對方註冊的帳號進行開通。")
@@ -201,25 +263,32 @@ else:
                     else:
                         st.error("找不到此帳號，請確認對方是否已註冊。")
             
-            st.write("📋 目前註冊會員列表：")
-            st.json(st.session_state['db_users'])
+            st.write("📋 雲端會員資料庫預覽：")
+            st.dataframe(get_data_as_df('users'))
 
         st.divider()
 
-    # --- VIP 內容區 ---
+    # --- VIP 內容區 (讀取雲端文章) ---
     if is_vip:
         st.title("📊 主力戰情日報")
         
-        for post in st.session_state['db_posts']:
-            with st.container():
-                st.markdown(f"### {post['title']}")
-                st.caption(f"發布時間: {post['date']}")
-                
-                if post['img']:
-                    st.image(post['img'])
-                
-                st.write(post['content'])
-                st.divider()
+        # 從雲端讀取文章
+        df_posts = get_data_as_df('posts')
+        
+        if not df_posts.empty:
+            # 將資料反轉，讓最新的文章在最上面
+            for index, row in df_posts.iloc[::-1].iterrows():
+                with st.container():
+                    st.markdown(f"### {row['title']}")
+                    st.caption(f"發布時間: {row['date']}")
+                    
+                    if row['img']:
+                        st.image(row['img'])
+                    
+                    st.write(row['content'])
+                    st.divider()
+        else:
+            st.info("目前還沒有發布任何文章。")
     
     # --- 過期會員區 ---
     else:
@@ -233,6 +302,8 @@ else:
         
         st.link_button("👉 前往付款 (歐付寶)", OPAY_URL)
         
-        st.write("#### 🔒 最新文章列表 (VIP限定)")
-        for post in st.session_state['db_posts']:
-            st.info(f"🔒 {post['date']} | {post['title']}")
+        st.write("#### 🔒 最新文章標題 (VIP限定)")
+        df_posts = get_data_as_df('posts')
+        if not df_posts.empty:
+            for index, row in df_posts.iloc[::-1].iterrows():
+                st.info(f"🔒 {row['date']} | {row['title']}")
