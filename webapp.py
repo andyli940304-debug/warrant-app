@@ -90,7 +90,11 @@ def register_user(username, password):
     try:
         sh = get_db_connection()
         ws = sh.worksheet('users')
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        # 🔥 修正時區：取得台灣時間 (UTC+8)
+        tw_now = datetime.now() + timedelta(hours=8)
+        yesterday = (tw_now - timedelta(days=1)).strftime("%Y-%m-%d")
+        
         ws.append_row([str(username), str(password), yesterday])
         return True, "註冊成功！請切換到「登入」分頁進入。"
     except Exception as e:
@@ -105,7 +109,10 @@ def check_subscription(username):
         expiry_str = str(user_row.iloc[0]['expiry'])
         try:
             expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-            if expiry_date >= datetime.now().date():
+            # 🔥 修正時區：比對時也要用台灣時間
+            tw_today = (datetime.now() + timedelta(hours=8)).date()
+            
+            if expiry_date >= tw_today:
                 return True, expiry_str
             else:
                 return False, expiry_str
@@ -121,11 +128,16 @@ def add_days_to_user(username, days=30):
         if not cell: return False
         row_num = cell.row
         current_expiry_str = ws.cell(row_num, 3).value
+        
+        # 🔥 修正時區：取得台灣時間
+        tw_today = (datetime.now() + timedelta(hours=8)).date()
+        
         try:
             current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
         except:
-            current_expiry = datetime.now().date()
-        start_date = max(current_expiry, datetime.now().date())
+            current_expiry = tw_today
+            
+        start_date = max(current_expiry, tw_today)
         new_expiry = start_date + timedelta(days=days)
         new_expiry_str = new_expiry.strftime("%Y-%m-%d")
         ws.update_cell(row_num, 3, new_expiry_str)
@@ -138,7 +150,11 @@ def add_new_post(title, content, img_url=""):
     try:
         sh = get_db_connection()
         ws = sh.worksheet('posts')
-        date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        # 🔥 修正時區：發文時間強制 +8 小時 (台灣時間)
+        tw_time = datetime.now() + timedelta(hours=8)
+        date_str = tw_time.strftime("%Y-%m-%d %H:%M")
+        
         ws.append_row([date_str, title, content, img_url])
         return True
     except Exception as e:
@@ -309,7 +325,6 @@ else:
                     if img_data:
                         if "," in str(img_data):
                             img_list = img_data.split(",")
-                            # 🔥 修正處：這裡拿掉了 width=None，解決報錯問題
                             st.image(img_list)
                         else:
                             st.image(img_data)
