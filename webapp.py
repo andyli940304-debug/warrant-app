@@ -13,6 +13,9 @@ import requests
 SHEET_NAME = '會員系統資料庫'
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
+# 🔥 已填入您的圖片資料夾 ID
+IMAGE_FOLDER_ID = "1Mdo6FRaCfRJ8pTvVPcS_4v3m-PS8Xq5g"
+
 @st.cache_resource
 def get_db_connection():
     """連線到 Google Sheets"""
@@ -25,7 +28,7 @@ def get_db_connection():
 
 def upload_image_to_drive(image_file):
     """
-    (除錯版) 上傳圖片到 Google Drive，失敗時會顯示詳細錯誤原因
+    上傳圖片到指定的 Google Drive 資料夾，解決空間不足問題
     """
     if not image_file:
         return ""
@@ -37,24 +40,32 @@ def upload_image_to_drive(image_file):
         creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
         token = creds.get_access_token().access_token
         
-        # 2. 上傳檔案
         headers = {"Authorization": f"Bearer {token}"}
+        
+        # 2. 設定檔案資料，指定 parents (存到您的資料夾)
+        file_metadata = {
+            'name': image_file.name,
+            'parents': [IMAGE_FOLDER_ID]  # 關鍵：存到您指定的資料夾
+        }
+        
         files = {
-            'metadata': (None, json.dumps({'name': image_file.name}), 'application/json'),
+            'metadata': (None, json.dumps(file_metadata), 'application/json'),
             'file': (image_file.name, image_file, image_file.type)
         }
+        
+        # 3. 上傳檔案
         response = requests.post(
             "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
             headers=headers,
             files=files
         )
         
-        # 🔥🔥🔥 除錯重點：檢查 HTTP 狀態碼 🔥🔥🔥
+        # 檢查是否上傳成功
         if response.status_code != 200:
             st.error(f"❌ 上傳失敗 (HTTP {response.status_code})")
-            # 嘗試顯示 Google 回傳的錯誤訊息
+            # 嘗試印出錯誤原因
             try:
-                st.json(response.json())
+                st.write(response.json())
             except:
                 st.write(response.text)
             return ""
@@ -62,30 +73,28 @@ def upload_image_to_drive(image_file):
         file_id = response.json().get('id')
         
         if not file_id:
-            st.error("❌ 上傳失敗：無法取得檔案 ID")
+            st.error("❌ 無法取得檔案 ID")
             return ""
 
-        # 3. 設定公開權限
+        # 4. 設定權限為「公開讀取」(讓會員看得到)
         perm_res = requests.post(
             f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
             headers=headers,
             json={"role": "reader", "type": "anyone"}
         )
         
-        # 檢查權限設定是否成功
         if perm_res.status_code != 200:
-            st.warning(f"⚠️ 上傳成功但權限設定失敗 (HTTP {perm_res.status_code})")
-            st.json(perm_res.json())
+            st.warning("⚠️ 上傳成功但權限設定失敗，圖片可能無法顯示")
 
-        # 4. 回傳連結
+        # 5. 回傳連結
         return f"https://drive.google.com/uc?export=view&id={file_id}"
         
     except Exception as e:
-        st.error(f"❌ 程式執行錯誤: {e}")
+        st.error(f"❌ 程式錯誤: {e}")
         return ""
 
 # ==========================================
-# 2. 核心功能函數 (無變動)
+# 2. 核心功能函數
 # ==========================================
 
 def get_data_as_df(worksheet_name):
