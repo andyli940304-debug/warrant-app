@@ -18,7 +18,6 @@ def get_db_connection():
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
     # 從 Secrets 讀取金鑰
-    # 請確保您已經在 Streamlit 網頁後台設定好 gcp_key
     key_dict = json.loads(st.secrets["gcp_key"])
     
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
@@ -40,7 +39,6 @@ def get_data_as_df(worksheet_name):
         return pd.DataFrame()
 
 def check_login(username, password):
-    # BOSS 特權通道
     if username == 'BOSS07260304' and password == '04036270BOSS':
         return True
     
@@ -130,8 +128,30 @@ def add_new_post(title, content, img_url=""):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 🔥 修正處：這裡刪掉了 header {visibility: hidden;}，現在左上角按鈕會回來了
-st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>""", unsafe_allow_html=True)
+# 🔥 關鍵修改：用 CSS 精準隱藏右邊的 Toolbar，但保留 Header 給左邊按鈕用
+st.markdown("""
+    <style>
+        /* 隱藏右上角的選單 (Share, Star, GitHub 等) */
+        [data-testid="stToolbar"] {
+            visibility: hidden;
+            display: none;
+        }
+        /* 隱藏最上面的彩色列 */
+        [data-testid="stDecoration"] {
+            visibility: hidden;
+            display: none;
+        }
+        /* 隱藏頁尾 "Made with Streamlit" */
+        footer {
+            visibility: hidden;
+            display: none;
+        }
+        /* 確保 Header 本身是透明的，才不會擋到滑鼠點擊 */
+        header {
+            background-color: transparent !important;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.title("🔐 會員中心")
