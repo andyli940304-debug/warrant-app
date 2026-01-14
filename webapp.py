@@ -13,84 +13,59 @@ import requests
 SHEET_NAME = '會員系統資料庫'
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
-# 🔥 已填入您的圖片資料夾 ID
-IMAGE_FOLDER_ID = "1Mdo6FRaCfRJ8pTvVPcS_4v3m-PS8Xq5g"
+# 🔥 ImgBB API 金鑰 (已直接寫入，無需再設定 Secrets)
+IMGBB_API_KEY = "fef8684953f08c5da5faff27ce582fdb"
 
 @st.cache_resource
 def get_db_connection():
     """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    
+    # 注意：GCP 金鑰還是必須從 Secrets 讀取 (因為太長了)
     key_dict = json.loads(st.secrets["gcp_key"])
+    
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME)
     return sheet
 
-def upload_image_to_drive(image_file):
+def upload_image_to_imgbb(image_file):
     """
-    上傳圖片到指定的 Google Drive 資料夾，解決空間不足問題
+    上傳圖片到 ImgBB (無限空間、免費圖床)
     """
     if not image_file:
         return ""
     
     try:
-        # 1. 取得權限
-        scope = ['https://www.googleapis.com/auth/drive']
-        key_dict = json.loads(st.secrets["gcp_key"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
-        token = creds.get_access_token().access_token
+        # 1. 準備上傳到 ImgBB
+        url = "https://api.imgbb.com/1/upload"
         
-        headers = {"Authorization": f"Bearer {token}"}
-        
-        # 2. 設定檔案資料，指定 parents (存到您的資料夾)
-        file_metadata = {
-            'name': image_file.name,
-            'parents': [IMAGE_FOLDER_ID]  # 關鍵：存到您指定的資料夾
+        payload = {
+            "key": IMGBB_API_KEY, # 使用我們剛剛填入的金鑰
         }
-        
         files = {
-            'metadata': (None, json.dumps(file_metadata), 'application/json'),
-            'file': (image_file.name, image_file, image_file.type)
+            "image": image_file.getvalue()
         }
         
-        # 3. 上傳檔案
-        response = requests.post(
-            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
-            headers=headers,
-            files=files
-        )
+        # 2. 發送請求
+        response = requests.post(url, data=payload, files=files)
         
-        # 檢查是否上傳成功
-        if response.status_code != 200:
-            st.error(f"❌ 上傳失敗 (HTTP {response.status_code})")
-            # 嘗試印出錯誤原因
+        # 3. 檢查結果
+        if response.status_code == 200:
+            result = response.json()
+            # 回傳圖片的直接連結 (Direct Link)
+            return result['data']['url']
+        else:
+            st.error(f"❌ ImgBB 上傳失敗 (HTTP {response.status_code})")
+            # 顯示錯誤原因以便除錯
             try:
                 st.write(response.json())
             except:
                 st.write(response.text)
             return ""
-
-        file_id = response.json().get('id')
-        
-        if not file_id:
-            st.error("❌ 無法取得檔案 ID")
-            return ""
-
-        # 4. 設定權限為「公開讀取」(讓會員看得到)
-        perm_res = requests.post(
-            f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
-            headers=headers,
-            json={"role": "reader", "type": "anyone"}
-        )
-        
-        if perm_res.status_code != 200:
-            st.warning("⚠️ 上傳成功但權限設定失敗，圖片可能無法顯示")
-
-        # 5. 回傳連結
-        return f"https://drive.google.com/uc?export=view&id={file_id}"
-        
+            
     except Exception as e:
-        st.error(f"❌ 程式錯誤: {e}")
+        st.error(f"❌ 程式執行錯誤: {e}")
         return ""
 
 # ==========================================
@@ -267,6 +242,7 @@ else:
                     st.write("### 發布新戰情")
                     new_title = st.text_input("文章標題")
                     new_content = st.text_area("內容", height=200)
+                    # 支援多圖上傳
                     uploaded_files = st.file_uploader(
                         "上傳圖片 (支援多選，最多10張)", 
                         type=['png', 'jpg', 'jpeg'], 
@@ -285,7 +261,8 @@ else:
                             total_files = len(files_to_process)
                             
                             for i, img_file in enumerate(files_to_process):
-                                url = upload_image_to_drive(img_file)
+                                # 使用 ImgBB 上傳
+                                url = upload_image_to_imgbb(img_file)
                                 if url:
                                     img_urls.append(url)
                                 percent_complete = int((i + 1) / total_files * 100)
