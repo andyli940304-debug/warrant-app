@@ -128,27 +128,41 @@ def add_new_post(title, content, img_url=""):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 🔥 關鍵修改：用 CSS 精準隱藏右邊的 Toolbar，但保留 Header 給左邊按鈕用
+# 🔥 手機版修復：強制顯示側邊欄按鈕，並設為顯眼顏色
 st.markdown("""
     <style>
-        /* 隱藏右上角的選單 (Share, Star, GitHub 等) */
+        /* 1. 隱藏右上角的選單 (Share, Star, GitHub 等) */
         [data-testid="stToolbar"] {
-            visibility: hidden;
-            display: none;
+            visibility: hidden !important;
+            display: none !important;
         }
-        /* 隱藏最上面的彩色列 */
+        
+        /* 2. 隱藏最上面的彩色列 */
         [data-testid="stDecoration"] {
-            visibility: hidden;
-            display: none;
+            visibility: hidden !important;
+            display: none !important;
         }
-        /* 隱藏頁尾 "Made with Streamlit" */
+        
+        /* 3. 隱藏頁尾 */
         footer {
-            visibility: hidden;
-            display: none;
+            visibility: hidden !important;
+            display: none !important;
         }
-        /* 確保 Header 本身是透明的，才不會擋到滑鼠點擊 */
+        
+        /* 4. 關鍵修復：確保 header 是透明的，但「不會擋住」按鈕 */
         header {
             background-color: transparent !important;
+        }
+        
+        /* 5. 強制顯示左上角的「展開側邊欄」按鈕 (箭頭) */
+        [data-testid="stSidebarCollapsedControl"] {
+            display: block !important;
+            visibility: visible !important;
+            color: #FFFFFF !important;  /* 強制設為白色 */
+            z-index: 999999 !important; /* 確保它浮在最上面 */
+            background-color: rgba(128, 128, 128, 0.2); /* 加一點點灰色底，怕背景太白看不到 */
+            border-radius: 50%;
+            padding: 5px;
         }
     </style>
 """, unsafe_allow_html=True)
