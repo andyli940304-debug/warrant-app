@@ -9,7 +9,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ==========================================
 
 # 你的金鑰檔案路徑 (請確保檔案真的在這個位置)
-JSON_PATH = r"C:\Users\andyl\Downloads\KEY.json"
+JSON_PATH =KEY.json"
 # 你的試算表名稱
 SHEET_NAME = '會員系統資料庫'
 # 你的歐付寶收款連結
@@ -307,3 +307,4 @@ else:
         if not df_posts.empty:
             for index, row in df_posts.iloc[::-1].iterrows():
                 st.info(f"🔒 {row['date']} | {row['title']}")
+
