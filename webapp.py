@@ -3,14 +3,13 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 # ==========================================
-# 1. 模擬資料庫 (暫存於記憶體中)
+# 1. 模擬資料庫
 # ==========================================
 if 'db_users' not in st.session_state:
     st.session_state['db_users'] = {
-        # 格式: '帳號': {'pwd': '密碼', 'expiry': '到期日(YYYY-MM-DD)'}
         'admin': {'pwd': 'admin', 'expiry': '2099-12-31'},  # 管理員
-        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},  # 測試VIP
-        'user':  {'pwd': '123',   'expiry': '2023-01-01'}   # 測試過期會員
+        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},  # 範例VIP
+        'user':  {'pwd': '123',   'expiry': '2023-01-01'}   # 範例過期者
     }
 
 if 'db_posts' not in st.session_state:
@@ -27,17 +26,26 @@ if 'db_posts' not in st.session_state:
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
 # ==========================================
-# 2. 核心功能函數 (邏輯處理)
+# 2. 核心功能函數
 # ==========================================
 def check_login(username, password):
-    """驗證帳號密碼"""
     users = st.session_state['db_users']
     if username in users and users[username]['pwd'] == password:
         return True
     return False
 
+def register_user(username, password):
+    """註冊新用戶 (預設為過期狀態)"""
+    users = st.session_state['db_users']
+    if username in users:
+        return False, "帳號已存在"
+    
+    # 設定昨天的日期 (代表一註冊就是過期，需要付款)
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    users[username] = {'pwd': password, 'expiry': yesterday}
+    return True, "註冊成功！請登入並付款開通。"
+
 def check_subscription(username):
-    """檢查會員是否過期"""
     if username == 'admin': return True, "永久會員"
     
     user_info = st.session_state['db_users'][username]
@@ -51,7 +59,6 @@ def check_subscription(username):
         return False, expiry_str
 
 def add_days_to_user(username, days=30):
-    """(管理員用) 手動幫會員充值天數"""
     if username in st.session_state['db_users']:
         user_info = st.session_state['db_users'][username]
         current_expiry = datetime.strptime(user_info['expiry'], "%Y-%m-%d").date()
@@ -69,7 +76,7 @@ def add_days_to_user(username, days=30):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 🔥🔥🔥【這裡就是隱藏選單的魔法代碼】🔥🔥🔥
+# 隱藏選單
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -78,24 +85,44 @@ header {visibility: hidden;}
 </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-# 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
 
-# --- 側邊欄：登入/登出區 ---
+# --- 側邊欄：登入/註冊系統 ---
 with st.sidebar:
     st.title("🔐 會員中心")
     
     if 'logged_in_user' not in st.session_state:
-        st.info("請先登入以查看戰情室")
-        user_input = st.text_input("帳號")
-        pwd_input = st.text_input("密碼", type="password")
+        # 使用頁籤切換 登入/註冊
+        tab_login, tab_register = st.tabs(["登入", "註冊新帳號"])
         
-        if st.button("登入"):
-            if check_login(user_input, pwd_input):
-                st.session_state['logged_in_user'] = user_input
-                st.rerun()
-            else:
-                st.error("帳號或密碼錯誤！")
+        with tab_login:
+            user_input = st.text_input("帳號", key="login_user")
+            pwd_input = st.text_input("密碼", type="password", key="login_pwd")
+            if st.button("登入", key="btn_login"):
+                if check_login(user_input, pwd_input):
+                    st.session_state['logged_in_user'] = user_input
+                    st.rerun()
+                else:
+                    st.error("帳號或密碼錯誤！")
+        
+        with tab_register:
+            new_user = st.text_input("設定帳號", key="reg_user")
+            new_pwd = st.text_input("設定密碼", type="password", key="reg_pwd")
+            new_pwd_confirm = st.text_input("確認密碼", type="password", key="reg_pwd2")
+            
+            if st.button("立即註冊", key="btn_reg"):
+                if new_pwd != new_pwd_confirm:
+                    st.error("兩次密碼輸入不一致")
+                elif not new_user or not new_pwd:
+                    st.error("帳號密碼不能為空")
+                else:
+                    success, msg = register_user(new_user, new_pwd)
+                    if success:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+
     else:
+        # 已登入狀態
         curr_user = st.session_state['logged_in_user']
         is_active, expiry_date = check_subscription(curr_user)
         
@@ -115,8 +142,8 @@ with st.sidebar:
 
 # --- 主畫面內容 ---
 
-# 情況 A: 未登入 -> 顯示廣告頁 (Landing Page)
 if 'logged_in_user' not in st.session_state:
+    # 未登入首頁
     st.title("🚀 權證主力戰情室")
     st.markdown("### 每日盤後，掌握大戶資金流向")
     
@@ -127,12 +154,10 @@ if 'logged_in_user' not in st.session_state:
         st.warning("🤖 **AI 深度點評**\n\n結合基本面與籌碼面的精闢分析，省去你 3 小時做功課時間。")
     
     st.divider()
-    st.write("🔒 **本站為會員制，請登入或訂閱後觀看。**")
+    st.write("🔒 **請先在左側「註冊」或「登入」後觀看。**")
     st.markdown("### 💰 訂閱方案：每月只要 NT$ 188")
-    
     st.link_button("👉 立即註冊並訂閱", OPAY_URL)
 
-# 情況 B: 已登入 -> 檢查權限
 else:
     user = st.session_state['logged_in_user']
     is_vip, expiry = check_subscription(user)
@@ -162,13 +187,23 @@ else:
                     st.success("文章發布成功！")
         
         with tab2:
-            st.write("手動幫會員加值 (模擬收到歐付寶通知)：")
-            target_user = st.text_input("輸入會員帳號")
-            if st.button("加值 30 天"):
-                if add_days_to_user(target_user):
-                    st.success(f"已成功幫 {target_user} 延長 30 天！")
-                else:
-                    st.error("找不到此帳號")
+            st.info("收到歐付寶通知後，請在此輸入對方註冊的帳號進行開通。")
+            col_a, col_b = st.columns([3, 1])
+            with col_a:
+                target_user = st.text_input("輸入會員帳號")
+            with col_b:
+                st.write("") # 排版用
+                st.write("")
+                if st.button("加值 30 天"):
+                    if add_days_to_user(target_user):
+                        st.success(f"已成功幫 {target_user} 延長 30 天！")
+                    else:
+                        st.error("找不到此帳號，請確認對方是否已註冊。")
+            
+            # 顯示所有會員 (方便你查看)
+            st.write("📋 目前註冊會員列表：")
+            st.json(st.session_state['db_users'])
+
         st.divider()
 
     # --- VIP 內容區 ---
@@ -188,11 +223,16 @@ else:
     
     # --- 過期會員區 ---
     else:
-        st.warning("⛔ 您的訂閱已到期，無法查看完整內容。")
-        st.write("請續費以解鎖最新主力籌碼分析報告。")
-        st.link_button("👉 立即續約 (歐付寶 $188)", OPAY_URL)
+        st.warning("⛔ 您的會員權限尚未開通或已到期。")
+        st.write("請依照以下步驟開通：")
+        st.markdown(f"""
+        1. 點擊下方按鈕前往歐付寶付款 (**$188/月**)。
+        2. 付款時，請在備註欄填寫您的帳號： **{user}**
+        3. 付款完成後，管理員將在 12 小時內為您開通權限。
+        """)
+        
+        st.link_button("👉 前往付款 (歐付寶)", OPAY_URL)
         
         st.write("#### 🔒 最新文章列表 (VIP限定)")
         for post in st.session_state['db_posts']:
             st.info(f"🔒 {post['date']} | {post['title']}")
-            
