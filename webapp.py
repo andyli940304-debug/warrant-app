@@ -13,24 +13,40 @@ import requests
 SHEET_NAME = '會員系統資料庫'
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
-# ImgBB API 金鑰
-IMGBB_API_KEY = "fef8684953f08c5da5faff27ce582fdb"
-
 @st.cache_resource
 def get_db_connection():
     """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    key_dict = json.loads(st.secrets["gcp_key"])
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
-    client = gspread.authorize(creds)
-    sheet = client.open(SHEET_NAME)
-    return sheet
+    
+    # 🔥 修改：從 Secrets 讀取，而不是寫死在程式碼
+    # 這樣 GitHub 就不會報錯，駭客也看不到
+    if "gcp_key" in st.secrets:
+        key_data = st.secrets["gcp_key"]
+        # 如果是字串就轉成字典，如果是字典就直接用
+        if isinstance(key_data, str):
+            key_dict = json.loads(key_data)
+        else:
+            key_dict = key_data
+            
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+        client = gspread.authorize(creds)
+        sheet = client.open(SHEET_NAME)
+        return sheet
+    else:
+        st.error("找不到 GCP Key，請檢查 Secrets 設定！")
+        return None
 
 def upload_image_to_imgbb(image_file):
     if not image_file: return ""
     try:
+        # 🔥 修改：從 Secrets 讀取 ImgBB 金鑰
+        if "imgbb_key" in st.secrets:
+            api_key = st.secrets["imgbb_key"]
+        else:
+            return "" # 沒金鑰就不上傳
+            
         url = "https://api.imgbb.com/1/upload"
-        payload = {"key": IMGBB_API_KEY}
+        payload = {"key": api_key}
         files = {"image": image_file.getvalue()}
         response = requests.post(url, data=payload, files=files)
         if response.status_code == 200:
@@ -54,7 +70,13 @@ def get_data_as_df(worksheet_name):
         return pd.DataFrame()
 
 def check_login(username, password):
-    if username == 'BOSS07260304' and password == '04036270BOSS': return True
+    # 🔥 修改：從 Secrets 讀取管理員帳密
+    if "admin_username" in st.secrets:
+        admin_user = st.secrets["admin_username"]
+        admin_pwd = st.secrets["admin_password"]
+        if str(username) == str(admin_user) and str(password) == str(admin_pwd):
+            return True
+            
     df = get_data_as_df('users')
     if df.empty: return False
     user_row = df[df['username'].astype(str) == str(username)]
@@ -78,7 +100,11 @@ def register_user(username, password):
         return False, f"連線錯誤: {e}"
 
 def check_subscription(username):
-    if username == 'BOSS07260304': return True, "永久會員 (管理員)"
+    # 🔥 修改：從 Secrets 讀取管理員帳號
+    if "admin_username" in st.secrets:
+        if str(username) == str(st.secrets["admin_username"]): 
+            return True, "永久會員 (管理員)"
+    
     df = get_data_as_df('users')
     if df.empty: return False, "資料庫讀取失敗"
     user_row = df[df['username'].astype(str) == str(username)]
@@ -136,9 +162,7 @@ if 'logged_in_user' not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
     
-    # 🔥 關鍵修改：
-    # 1. 不放在任何 column 裡面，直接放在主畫面流程中
-    # 2. 使用原生的 st.error (不使用 HTML)，保證渲染出來
+    # 法律免責聲明 (置頂)
     st.error("⚠️ **法律免責聲明**：本網站數據僅供學術研究參考，**絕不構成任何投資建議**。使用者應自行承擔所有投資風險，盈虧自負。")
     
     st.divider()
@@ -199,13 +223,17 @@ else:
             del st.session_state['logged_in_user']
             st.rerun()
             
-    # 🔥 修改處：已登入後的免責聲明，同樣置頂並使用原生警告框
+    # 免責聲明 (置頂)
     st.warning("⚠️ **免責聲明**：本網站內容僅為資訊整理，**不構成投資建議**。盈虧自負。")
 
     st.divider()
 
     # --- 管理員後台 ---
-    if user == 'BOSS07260304':
+    is_admin = False
+    if "admin_username" in st.secrets:
+        if str(user) == str(st.secrets["admin_username"]): is_admin = True
+        
+    if is_admin:
         with st.expander("🔧 管理員後台 (點擊展開)", expanded=True):
             tab1, tab2 = st.tabs(["發布文章", "會員管理"])
             with tab1:
