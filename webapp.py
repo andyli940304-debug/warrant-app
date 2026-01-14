@@ -54,7 +54,6 @@ def get_data_as_df(worksheet_name):
         return pd.DataFrame()
 
 def check_login(username, password):
-    # 這裡建議之後改用 st.secrets["admin_username"] 以策安全，目前維持原樣方便您測試
     if username == 'BOSS07260304' and password == '04036270BOSS': return True
     df = get_data_as_df('users')
     if df.empty: return False
@@ -136,6 +135,10 @@ st.markdown("""
 if 'logged_in_user' not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
+    
+    # 🔥 修改處：直接放在大標題下方，不放進 columns，保證置頂顯示！
+    st.error("⚠️ **免責聲明**：本網站數據僅供學術研究參考，**不構成投資建議**。使用者應自行承擔風險。")
+    
     st.divider()
 
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -171,10 +174,6 @@ if 'logged_in_user' not in st.session_state:
                         st.success(msg)
                     else:
                         st.error(msg)
-        
-        # 🔥 修改處 1：把免責聲明放在這裡 (登入表格的下方)，使用紅色 error 框，絕對顯眼！
-        st.write("")
-        st.error("⚠️ **法律免責聲明**：本網站數據僅供學術研究參考，**絕不構成任何投資建議**。使用者應自行承擔所有風險。")
     
     st.write("")
     c1, c2 = st.columns(2)
@@ -198,7 +197,7 @@ else:
             del st.session_state['logged_in_user']
             st.rerun()
             
-    # 🔥 修改處 2：已登入後，使用黃色 warning 框，放在最頂端
+    # 🔥 修改處：已登入後，使用黃色 warning 框，放在最頂端
     st.warning("⚠️ **免責聲明**：本網站內容僅為資訊整理，**不構成投資建議**。盈虧自負。")
 
     st.divider()
