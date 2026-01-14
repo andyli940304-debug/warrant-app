@@ -20,42 +20,24 @@ IMGBB_API_KEY = "fef8684953f08c5da5faff27ce582fdb"
 def get_db_connection():
     """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
-    
-    # 從 Secrets 讀取 GCP 金鑰
     key_dict = json.loads(st.secrets["gcp_key"])
-    
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
     client = gspread.authorize(creds)
     sheet = client.open(SHEET_NAME)
     return sheet
 
 def upload_image_to_imgbb(image_file):
-    """
-    上傳圖片到 ImgBB
-    """
-    if not image_file:
-        return ""
-    
+    if not image_file: return ""
     try:
         url = "https://api.imgbb.com/1/upload"
-        payload = {
-            "key": IMGBB_API_KEY,
-        }
-        files = {
-            "image": image_file.getvalue()
-        }
-        
+        payload = {"key": IMGBB_API_KEY}
+        files = {"image": image_file.getvalue()}
         response = requests.post(url, data=payload, files=files)
-        
         if response.status_code == 200:
-            result = response.json()
-            return result['data']['url']
+            return response.json()['data']['url']
         else:
-            st.error(f"❌ ImgBB 上傳失敗 (HTTP {response.status_code})")
             return ""
-            
-    except Exception as e:
-        st.error(f"❌ 程式執行錯誤: {e}")
+    except:
         return ""
 
 # ==========================================
@@ -68,18 +50,16 @@ def get_data_as_df(worksheet_name):
         ws = sh.worksheet(worksheet_name)
         data = ws.get_all_records()
         return pd.DataFrame(data)
-    except Exception as e:
+    except:
         return pd.DataFrame()
 
 def check_login(username, password):
-    if username == 'BOSS07260304' and password == '04036270BOSS':
-        return True
+    if username == 'BOSS07260304' and password == '04036270BOSS': return True
     df = get_data_as_df('users')
     if df.empty: return False
     user_row = df[df['username'].astype(str) == str(username)]
     if not user_row.empty:
-        stored_pwd = str(user_row.iloc[0]['password'])
-        if stored_pwd == str(password):
+        if str(user_row.iloc[0]['password']) == str(password):
             return True
     return False
 
@@ -90,11 +70,8 @@ def register_user(username, password):
     try:
         sh = get_db_connection()
         ws = sh.worksheet('users')
-        
-        # 修正時區：取得台灣時間 (UTC+8)
         tw_now = datetime.now() + timedelta(hours=8)
         yesterday = (tw_now - timedelta(days=1)).strftime("%Y-%m-%d")
-        
         ws.append_row([str(username), str(password), yesterday])
         return True, "註冊成功！請切換到「登入」分頁進入。"
     except Exception as e:
@@ -109,15 +86,10 @@ def check_subscription(username):
         expiry_str = str(user_row.iloc[0]['expiry'])
         try:
             expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-            # 修正時區：比對時也要用台灣時間
             tw_today = (datetime.now() + timedelta(hours=8)).date()
-            
-            if expiry_date >= tw_today:
-                return True, expiry_str
-            else:
-                return False, expiry_str
-        except:
-            return False, "日期格式異常"
+            if expiry_date >= tw_today: return True, expiry_str
+            else: return False, expiry_str
+        except: return False, "日期格式異常"
     return False, "無此帳號"
 
 def add_days_to_user(username, days=30):
@@ -128,38 +100,23 @@ def add_days_to_user(username, days=30):
         if not cell: return False
         row_num = cell.row
         current_expiry_str = ws.cell(row_num, 3).value
-        
-        # 修正時區：取得台灣時間
         tw_today = (datetime.now() + timedelta(hours=8)).date()
-        
-        try:
-            current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
-        except:
-            current_expiry = tw_today
-            
+        try: current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
+        except: current_expiry = tw_today
         start_date = max(current_expiry, tw_today)
         new_expiry = start_date + timedelta(days=days)
-        new_expiry_str = new_expiry.strftime("%Y-%m-%d")
-        ws.update_cell(row_num, 3, new_expiry_str)
+        ws.update_cell(row_num, 3, new_expiry.strftime("%Y-%m-%d"))
         return True
-    except Exception as e:
-        st.error(f"充值失敗: {e}")
-        return False
+    except: return False
 
 def add_new_post(title, content, img_url=""):
     try:
         sh = get_db_connection()
         ws = sh.worksheet('posts')
-        
-        # 修正時區：發文時間強制 +8 小時 (台灣時間)
         tw_time = datetime.now() + timedelta(hours=8)
-        date_str = tw_time.strftime("%Y-%m-%d %H:%M")
-        
-        ws.append_row([date_str, title, content, img_url])
+        ws.append_row([tw_time.strftime("%Y-%m-%d %H:%M"), title, content, img_url])
         return True
-    except Exception as e:
-        st.error(f"發文失敗: {e}")
-        return False
+    except: return False
 
 # ==========================================
 # 3. 網站介面
@@ -174,6 +131,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# --- 尚未登入區 ---
 if 'logged_in_user' not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
@@ -182,6 +140,9 @@ if 'logged_in_user' not in st.session_state:
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
+        # 🔥 修改處 1：把免責聲明放在這裡，用警告框顯示，保證顯眼！
+        st.warning("⚠️ **免責聲明**：本網站數據僅供學術研究參考，**不構成投資建議**。使用者應自行承擔風險。")
+        
         st.info("🔒 請先登入或註冊以繼續")
         tab_login, tab_register = st.tabs(["🔑 會員登入", "📝 免費註冊"])
         
@@ -212,22 +173,13 @@ if 'logged_in_user' not in st.session_state:
                         st.success(msg)
                     else:
                         st.error(msg)
-        
-        # 🔥 修改處：把免責聲明移到這裡 (登入框正下方)，一定看得到！
-        st.write("")
-        st.markdown("""
-            <div style='background-color: #f0f2f6; padding: 10px; border-radius: 5px; color: #555; font-size: 12px;'>
-                <strong>⚠️ 免責聲明：</strong> 本網站數據僅供軟體工具與學術研究參考，<strong>不構成任何投資建議</strong>。
-                金融市場波動劇烈，使用者應自行承擔投資風險。
-            </div>
-        """, unsafe_allow_html=True)
     
-    st.write("")
     st.write("")
     c1, c2 = st.columns(2)
     with c1: st.success("📊 **獨家籌碼表格**\n\n一眼看穿誰在買、誰在賣。")
-    with c2: st.warning("🤖 **AI 深度點評**\n\n結合基本面與籌碼面的精闢分析。")
+    with c2: st.info("🤖 **AI 深度點評**\n\n結合基本面與籌碼面的精闢分析。")
 
+# --- 已登入區 ---
 else:
     user = st.session_state['logged_in_user']
     is_vip, expiry = check_subscription(user)
@@ -236,16 +188,23 @@ else:
     with top_col1:
         st.title("🚀 權證主力戰情室")
         st.write(f"👋 歡迎回來，**{user}**")
-        if is_vip:
-            st.caption(f"✅ 會員效期至：{expiry}")
-        else:
-            st.caption(f"⛔ 會員已過期 ({expiry})")
+        if is_vip: st.caption(f"✅ 會員效期至：{expiry}")
+        else: st.caption(f"⛔ 會員已過期 ({expiry})")
     with top_col2:
         st.write("")
         if st.button("登出系統", use_container_width=True):
             del st.session_state['logged_in_user']
             st.rerun()
             
+    # 🔥 修改處 2：會員登入後，免責聲明直接放在最上面 (標題下方)
+    st.markdown("""
+        <div style='background-color: #fff3cd; color: #856404; padding: 10px; border-radius: 5px; font-size: 13px; margin-bottom: 15px; border: 1px solid #ffeeba;'>
+            <strong>⚠️ 法律免責聲明 (Disclaimer)</strong><br>
+            本網站內容僅為程式交易數據研究，<strong>絕不構成任何買賣建議或投資邀約</strong>。
+            金融市場風險極高，投資人應自行判斷並承擔盈虧責任。
+        </div>
+    """, unsafe_allow_html=True)
+
     st.divider()
 
     # --- 管理員後台 ---
@@ -257,66 +216,34 @@ else:
                     st.write("### 發布新戰情")
                     new_title = st.text_input("文章標題")
                     new_content = st.text_area("內容", height=200)
-                    uploaded_files = st.file_uploader(
-                        "上傳圖片 (支援多選，最多10張)", 
-                        type=['png', 'jpg', 'jpeg'], 
-                        accept_multiple_files=True
-                    )
-                    
+                    uploaded_files = st.file_uploader("上傳圖片 (最多10張)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
                     submitted = st.form_submit_button("發布文章")
-                    
                     if submitted:
                         final_img_str = ""
                         if uploaded_files:
                             img_urls = []
                             files_to_process = uploaded_files[:10]
-                            progress_text = "正在上傳圖片中，請稍候..."
-                            my_bar = st.progress(0, text=progress_text)
-                            total_files = len(files_to_process)
-                            
-                            for i, img_file in enumerate(files_to_process):
-                                url = upload_image_to_imgbb(img_file)
-                                if url:
-                                    img_urls.append(url)
-                                percent_complete = int((i + 1) / total_files * 100)
-                                my_bar.progress(percent_complete, text=f"正在上傳第 {i+1}/{total_files} 張...")
-                            
+                            bar = st.progress(0, text="上傳中...")
+                            for i, f in enumerate(files_to_process):
+                                url = upload_image_to_imgbb(f)
+                                if url: img_urls.append(url)
+                                bar.progress(int((i+1)/len(files_to_process)*100))
                             final_img_str = ",".join(img_urls)
-                            my_bar.empty()
-                        
+                            bar.empty()
                         if add_new_post(new_title, new_content, final_img_str):
-                            st.success(f"發布成功！共上傳 {len(uploaded_files)} 張圖片。")
-            
+                            st.success(f"發布成功！")
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
-                st.write("👇 選擇要加值的天數：")
-                btn_col0, btn_col1, btn_col2, btn_col3 = st.columns(4)
-                
-                with btn_col0:
-                    if st.button("💰 +1 天 (測試)", use_container_width=True):
-                        if add_days_to_user(target_user, 1):
-                            st.success(f"已幫 {target_user} 加值 1 天！")
-                        else: st.error("找不到帳號")
-
-                with btn_col1:
-                    if st.button("💰 +30 天", use_container_width=True):
-                        if add_days_to_user(target_user, 30):
-                            st.success(f"已幫 {target_user} 加值 30 天！")
-                        else: st.error("找不到帳號")
-                
-                with btn_col2:
-                    if st.button("💰 +60 天", use_container_width=True):
-                        if add_days_to_user(target_user, 60):
-                            st.success(f"已幫 {target_user} 加值 60 天！")
-                        else: st.error("找不到帳號")
-                            
-                with btn_col3:
-                    if st.button("💰 +90 天", use_container_width=True):
-                        if add_days_to_user(target_user, 90):
-                            st.success(f"已幫 {target_user} 加值 90 天！")
-                        else: st.error("找不到帳號")
-
-                st.write("📋 會員列表：")
+                st.write("👇 加值天數：")
+                b0, b1, b2, b3 = st.columns(4)
+                with b0:
+                    if st.button("+1 天", use_container_width=True): add_days_to_user(target_user, 1) and st.success("OK")
+                with b1:
+                    if st.button("+30 天", use_container_width=True): add_days_to_user(target_user, 30) and st.success("OK")
+                with b2:
+                    if st.button("+60 天", use_container_width=True): add_days_to_user(target_user, 60) and st.success("OK")
+                with b3:
+                    if st.button("+90 天", use_container_width=True): add_days_to_user(target_user, 90) and st.success("OK")
                 st.dataframe(get_data_as_df('users'))
         st.divider()
 
@@ -329,30 +256,17 @@ else:
                 with st.container():
                     st.markdown(f"### {row['title']}")
                     st.caption(f"{row['date']}")
-                    
-                    img_data = row['img']
-                    if img_data:
-                        if "," in str(img_data):
-                            img_list = img_data.split(",")
-                            st.image(img_list)
-                        else:
-                            st.image(img_data)
-                    
+                    if row['img']:
+                        if "," in str(row['img']): st.image(row['img'].split(","))
+                        else: st.image(row['img'])
                     st.write(row['content'])
                     st.divider()
-        else:
-            st.info("尚無文章")
+        else: st.info("尚無文章")
     else:
         st.error("⛔ 您的會員權限尚未開通或已到期。")
-        st.write("請付款後，等待管理員開通權限。")
         st.link_button("👉 前往歐付寶付款 ($188/月)", OPAY_URL, use_container_width=True)
-        
         st.write("#### 🔒 最新文章預覽")
         df_posts = get_data_as_df('posts')
         if not df_posts.empty:
             for index, row in df_posts.iloc[::-1].iterrows():
                 st.info(f"🔒 {row['date']} | {row['title']}")
-    
-    # 登入後的頁面，免責聲明放在最下面即可 (不用太搶眼)
-    st.divider()
-    st.caption("⚠️ 免責聲明：本網站所提供之數據僅供參考，不構成任何投資建議。使用者應自行承擔投資風險。")
