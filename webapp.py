@@ -135,29 +135,17 @@ st.markdown("""
 if 'logged_in_user' not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
+    
+    # 🔥 關鍵修改：
+    # 1. 不放在任何 column 裡面，直接放在主畫面流程中
+    # 2. 使用原生的 st.error (不使用 HTML)，保證渲染出來
+    st.error("⚠️ **法律免責聲明**：本網站數據僅供學術研究參考，**絕不構成任何投資建議**。使用者應自行承擔所有投資風險，盈虧自負。")
+    
     st.divider()
 
     col1, col2, col3 = st.columns([1, 2, 1])
 
-    # 🔥 關鍵修改：我們直接把免責聲明寫在 col2 (中間欄位) 裡面
-    # 只要您能看到登入框，就一定看得到這個紅色框框！
     with col2:
-        st.markdown("""
-            <div style="
-                border: 2px solid #ff4b4b;
-                background-color: #ffeded;
-                color: #ff4b4b;
-                padding: 10px;
-                border-radius: 5px;
-                text-align: center;
-                margin-bottom: 15px;
-                font-weight: bold;
-            ">
-            ⚠️ 法律免責聲明：<br>
-            本網站數據僅供學術研究參考，<br>不構成任何投資建議。盈虧自負。
-            </div>
-        """, unsafe_allow_html=True)
-
         st.info("🔒 請先登入或註冊以繼續")
         tab_login, tab_register = st.tabs(["🔑 會員登入", "📝 免費註冊"])
         
@@ -211,7 +199,7 @@ else:
             del st.session_state['logged_in_user']
             st.rerun()
             
-    # 會員登入後，使用 Streamlit 原生 warning 放在最上面
+    # 🔥 修改處：已登入後的免責聲明，同樣置頂並使用原生警告框
     st.warning("⚠️ **免責聲明**：本網站內容僅為資訊整理，**不構成投資建議**。盈虧自負。")
 
     st.divider()
