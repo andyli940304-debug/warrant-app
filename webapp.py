@@ -212,6 +212,15 @@ if 'logged_in_user' not in st.session_state:
                         st.success(msg)
                     else:
                         st.error(msg)
+        
+        # 🔥 修改處：把免責聲明移到這裡 (登入框正下方)，一定看得到！
+        st.write("")
+        st.markdown("""
+            <div style='background-color: #f0f2f6; padding: 10px; border-radius: 5px; color: #555; font-size: 12px;'>
+                <strong>⚠️ 免責聲明：</strong> 本網站數據僅供軟體工具與學術研究參考，<strong>不構成任何投資建議</strong>。
+                金融市場波動劇烈，使用者應自行承擔投資風險。
+            </div>
+        """, unsafe_allow_html=True)
     
     st.write("")
     st.write("")
@@ -343,15 +352,7 @@ else:
         if not df_posts.empty:
             for index, row in df_posts.iloc[::-1].iterrows():
                 st.info(f"🔒 {row['date']} | {row['title']}")
-
-# --- 全域頁尾：法律免責聲明 (置中、灰色小字) ---
-st.divider()
-st.markdown("""
-    <div style='text-align: center; color: gray; font-size: 12px;'>
-        <p><strong>⚠️ 免責聲明 (Disclaimer)</strong></p>
-        <p>本網站所提供之數據、圖表、分析內容與程式碼，僅供投資人作為軟體工具與學術研究參考，<br>
-        <strong>絕不構成任何買賣建議、投資邀約或誘導</strong>。</p>
-        <p>金融市場波動劇烈，使用者應自行判斷市場風險，並承擔所有投資盈虧。<br>
-        本網站及其經營者不對任何投資決策負法律責任。</p>
-    </div>
-""", unsafe_allow_html=True)
+    
+    # 登入後的頁面，免責聲明放在最下面即可 (不用太搶眼)
+    st.divider()
+    st.caption("⚠️ 免責聲明：本網站所提供之數據僅供參考，不構成任何投資建議。使用者應自行承擔投資風險。")
