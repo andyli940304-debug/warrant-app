@@ -13,7 +13,7 @@ import requests
 SHEET_NAME = '會員系統資料庫'
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
-# 🔥 ImgBB API 金鑰 (已直接寫入，無需再設定 Secrets)
+# ImgBB API 金鑰
 IMGBB_API_KEY = "fef8684953f08c5da5faff27ce582fdb"
 
 @st.cache_resource
@@ -21,7 +21,7 @@ def get_db_connection():
     """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
-    # 注意：GCP 金鑰還是必須從 Secrets 讀取 (因為太長了)
+    # 從 Secrets 讀取 GCP 金鑰
     key_dict = json.loads(st.secrets["gcp_key"])
     
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
@@ -31,37 +31,27 @@ def get_db_connection():
 
 def upload_image_to_imgbb(image_file):
     """
-    上傳圖片到 ImgBB (無限空間、免費圖床)
+    上傳圖片到 ImgBB
     """
     if not image_file:
         return ""
     
     try:
-        # 1. 準備上傳到 ImgBB
         url = "https://api.imgbb.com/1/upload"
-        
         payload = {
-            "key": IMGBB_API_KEY, # 使用我們剛剛填入的金鑰
+            "key": IMGBB_API_KEY,
         }
         files = {
             "image": image_file.getvalue()
         }
         
-        # 2. 發送請求
         response = requests.post(url, data=payload, files=files)
         
-        # 3. 檢查結果
         if response.status_code == 200:
             result = response.json()
-            # 回傳圖片的直接連結 (Direct Link)
             return result['data']['url']
         else:
             st.error(f"❌ ImgBB 上傳失敗 (HTTP {response.status_code})")
-            # 顯示錯誤原因以便除錯
-            try:
-                st.write(response.json())
-            except:
-                st.write(response.text)
             return ""
             
     except Exception as e:
@@ -242,7 +232,6 @@ else:
                     st.write("### 發布新戰情")
                     new_title = st.text_input("文章標題")
                     new_content = st.text_area("內容", height=200)
-                    # 支援多圖上傳
                     uploaded_files = st.file_uploader(
                         "上傳圖片 (支援多選，最多10張)", 
                         type=['png', 'jpg', 'jpeg'], 
@@ -261,7 +250,6 @@ else:
                             total_files = len(files_to_process)
                             
                             for i, img_file in enumerate(files_to_process):
-                                # 使用 ImgBB 上傳
                                 url = upload_image_to_imgbb(img_file)
                                 if url:
                                     img_urls.append(url)
@@ -321,7 +309,8 @@ else:
                     if img_data:
                         if "," in str(img_data):
                             img_list = img_data.split(",")
-                            st.image(img_list, width=None) 
+                            # 🔥 修正處：這裡拿掉了 width=None，解決報錯問題
+                            st.image(img_list)
                         else:
                             st.image(img_data)
                     
