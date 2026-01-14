@@ -25,19 +25,19 @@ def get_db_connection():
 
 def upload_image_to_drive(image_file):
     """
-    自動將上傳的圖片轉存到 Google Drive 並回傳公開連結
+    單張圖片上傳邏輯
     """
     if not image_file:
         return ""
     
     try:
-        # 1. 取得權限 (每次上傳都重新取得最新 Token，避免過期)
+        # 1. 取得權限
         scope = ['https://www.googleapis.com/auth/drive']
         key_dict = json.loads(st.secrets["gcp_key"])
         creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
         token = creds.get_access_token().access_token
         
-        # 2. 上傳檔案 (POST 到 Google Drive API)
+        # 2. 上傳檔案
         headers = {"Authorization": f"Bearer {token}"}
         files = {
             'metadata': (None, json.dumps({'name': image_file.name}), 'application/json'),
@@ -53,14 +53,14 @@ def upload_image_to_drive(image_file):
         if not file_id:
             return ""
 
-        # 3. 設定權限為「公開讀取」(讓會員看得到)
+        # 3. 設定公開權限
         requests.post(
             f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
             headers=headers,
             json={"role": "reader", "type": "anyone"}
         )
         
-        # 4. 回傳可以直接顯示的連結
+        # 4. 回傳連結
         return f"https://drive.google.com/uc?export=view&id={file_id}"
         
     except Exception as e:
@@ -134,6 +134,9 @@ def add_days_to_user(username, days=30):
             current_expiry = datetime.strptime(current_expiry_str, "%Y-%m-%d").date()
         except:
             current_expiry = datetime.now().date()
+        
+        # 邏輯：從「目前到期日」和「今天」之中選比較晚的那個開始加
+        # 這樣如果是過期很久的會員，會從今天開始算，不會被吃掉天數
         start_date = max(current_expiry, datetime.now().date())
         new_expiry = start_date + timedelta(days=days)
         new_expiry_str = new_expiry.strftime("%Y-%m-%d")
@@ -232,7 +235,7 @@ else:
             
     st.divider()
 
-    # --- 管理員後台 (修改區：改為圖片上傳) ---
+    # --- 管理員後台 ---
     if user == 'BOSS07260304':
         with st.expander("🔧 管理員後台 (點擊展開)", expanded=True):
             tab1, tab2 = st.tabs(["發布文章", "會員管理"])
@@ -241,29 +244,68 @@ else:
                     st.write("### 發布新戰情")
                     new_title = st.text_input("文章標題")
                     new_content = st.text_area("內容", height=200)
-                    
-                    # 🔥 修改處：改成檔案上傳器
-                    uploaded_file = st.file_uploader("上傳圖片 (支援手機拍照)", type=['png', 'jpg', 'jpeg'])
+                    uploaded_files = st.file_uploader(
+                        "上傳圖片 (支援多選，最多10張)", 
+                        type=['png', 'jpg', 'jpeg'], 
+                        accept_multiple_files=True
+                    )
                     
                     submitted = st.form_submit_button("發布文章")
                     
                     if submitted:
-                        # 如果有選圖片，就先上傳到 Drive 拿連結
-                        final_img_url = ""
-                        if uploaded_file:
-                            with st.spinner('正在上傳圖片到雲端...'):
-                                final_img_url = upload_image_to_drive(uploaded_file)
+                        final_img_str = ""
+                        if uploaded_files:
+                            img_urls = []
+                            files_to_process = uploaded_files[:10]
+                            progress_text = "正在上傳圖片中，請稍候..."
+                            my_bar = st.progress(0, text=progress_text)
+                            total_files = len(files_to_process)
+                            
+                            for i, img_file in enumerate(files_to_process):
+                                url = upload_image_to_drive(img_file)
+                                if url:
+                                    img_urls.append(url)
+                                percent_complete = int((i + 1) / total_files * 100)
+                                my_bar.progress(percent_complete, text=f"正在上傳第 {i+1}/{total_files} 張...")
+                            
+                            final_img_str = ",".join(img_urls)
+                            my_bar.empty()
                         
-                        if add_new_post(new_title, new_content, final_img_url):
-                            st.success("發布成功！")
+                        if add_new_post(new_title, new_content, final_img_str):
+                            st.success(f"發布成功！共上傳 {len(uploaded_files)} 張圖片。")
             
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
-                if st.button("加值 30 天"):
-                    if add_days_to_user(target_user):
-                        st.success(f"已幫 {target_user} 加值！")
-                    else:
-                        st.error("找不到帳號")
+                st.write("👇 選擇要加值的天數：")
+                
+                # 🔥 修改處：改成 4 個按鈕一排 (包含 +1 天)
+                btn_col0, btn_col1, btn_col2, btn_col3 = st.columns(4)
+                
+                with btn_col0:
+                    if st.button("💰 +1 天 (測試)", use_container_width=True):
+                        if add_days_to_user(target_user, 1):
+                            st.success(f"已幫 {target_user} 加值 1 天！")
+                        else: st.error("找不到帳號")
+
+                with btn_col1:
+                    if st.button("💰 +30 天", use_container_width=True):
+                        if add_days_to_user(target_user, 30):
+                            st.success(f"已幫 {target_user} 加值 30 天！")
+                        else: st.error("找不到帳號")
+                
+                with btn_col2:
+                    if st.button("💰 +60 天", use_container_width=True):
+                        if add_days_to_user(target_user, 60):
+                            st.success(f"已幫 {target_user} 加值 60 天！")
+                        else: st.error("找不到帳號")
+                            
+                with btn_col3:
+                    if st.button("💰 +90 天", use_container_width=True):
+                        if add_days_to_user(target_user, 90):
+                            st.success(f"已幫 {target_user} 加值 90 天！")
+                        else: st.error("找不到帳號")
+
+                st.write("📋 會員列表：")
                 st.dataframe(get_data_as_df('users'))
         st.divider()
 
@@ -277,9 +319,13 @@ else:
                     st.markdown(f"### {row['title']}")
                     st.caption(f"{row['date']}")
                     
-                    # 顯示圖片 (如果有)
-                    if row['img']: 
-                        st.image(row['img'])
+                    img_data = row['img']
+                    if img_data:
+                        if "," in str(img_data):
+                            img_list = img_data.split(",")
+                            st.image(img_list, width=None) 
+                        else:
+                            st.image(img_data)
                     
                     st.write(row['content'])
                     st.divider()
