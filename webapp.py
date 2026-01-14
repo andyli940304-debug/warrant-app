@@ -91,7 +91,7 @@ def register_user(username, password):
         sh = get_db_connection()
         ws = sh.worksheet('users')
         
-        # 🔥 修正時區：取得台灣時間 (UTC+8)
+        # 修正時區：取得台灣時間 (UTC+8)
         tw_now = datetime.now() + timedelta(hours=8)
         yesterday = (tw_now - timedelta(days=1)).strftime("%Y-%m-%d")
         
@@ -109,7 +109,7 @@ def check_subscription(username):
         expiry_str = str(user_row.iloc[0]['expiry'])
         try:
             expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
-            # 🔥 修正時區：比對時也要用台灣時間
+            # 修正時區：比對時也要用台灣時間
             tw_today = (datetime.now() + timedelta(hours=8)).date()
             
             if expiry_date >= tw_today:
@@ -129,7 +129,7 @@ def add_days_to_user(username, days=30):
         row_num = cell.row
         current_expiry_str = ws.cell(row_num, 3).value
         
-        # 🔥 修正時區：取得台灣時間
+        # 修正時區：取得台灣時間
         tw_today = (datetime.now() + timedelta(hours=8)).date()
         
         try:
@@ -151,7 +151,7 @@ def add_new_post(title, content, img_url=""):
         sh = get_db_connection()
         ws = sh.worksheet('posts')
         
-        # 🔥 修正時區：發文時間強制 +8 小時 (台灣時間)
+        # 修正時區：發文時間強制 +8 小時 (台灣時間)
         tw_time = datetime.now() + timedelta(hours=8)
         date_str = tw_time.strftime("%Y-%m-%d %H:%M")
         
@@ -343,3 +343,15 @@ else:
         if not df_posts.empty:
             for index, row in df_posts.iloc[::-1].iterrows():
                 st.info(f"🔒 {row['date']} | {row['title']}")
+
+# --- 全域頁尾：法律免責聲明 (置中、灰色小字) ---
+st.divider()
+st.markdown("""
+    <div style='text-align: center; color: gray; font-size: 12px;'>
+        <p><strong>⚠️ 免責聲明 (Disclaimer)</strong></p>
+        <p>本網站所提供之數據、圖表、分析內容與程式碼，僅供投資人作為軟體工具與學術研究參考，<br>
+        <strong>絕不構成任何買賣建議、投資邀約或誘導</strong>。</p>
+        <p>金融市場波動劇烈，使用者應自行判斷市場風險，並承擔所有投資盈虧。<br>
+        本網站及其經營者不對任何投資決策負法律責任。</p>
+    </div>
+""", unsafe_allow_html=True)
