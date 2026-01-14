@@ -6,12 +6,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 import json
 
 # ==========================================
-# 1. 雲端資料庫設定 & 連線功能 (改用 Secrets)
+# 1. 雲端資料庫設定 & 連線功能 (使用 Secrets)
 # ==========================================
 
-# 試算表名稱
 SHEET_NAME = '會員系統資料庫'
-# 歐付寶連結
 OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1485C4ED"
 
 @st.cache_resource
@@ -19,8 +17,8 @@ def get_db_connection():
     """連線到 Google Sheets (使用 Streamlit Secrets，安全不外洩)"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
-    # --- 關鍵修改：從 Secrets 讀取金鑰，而不是讀檔案 ---
-    # 我們剛剛在網頁後台設定了 gcp_key
+    # 從 Secrets 讀取金鑰
+    # 請確保您已經在 Streamlit 網頁後台設定好 gcp_key
     key_dict = json.loads(st.secrets["gcp_key"])
     
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
@@ -29,7 +27,7 @@ def get_db_connection():
     return sheet
 
 # ==========================================
-# 2. 核心功能函數 (維持不變)
+# 2. 核心功能函數
 # ==========================================
 
 def get_data_as_df(worksheet_name):
@@ -131,7 +129,9 @@ def add_new_post(title, content, img_url=""):
 # 3. 網站介面 (UI)
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
-st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;} header {visibility: hidden;}</style>""", unsafe_allow_html=True)
+
+# 🔥 修正處：這裡刪掉了 header {visibility: hidden;}，現在左上角按鈕會回來了
+st.markdown("""<style>#MainMenu {visibility: hidden;} footer {visibility: hidden;}</style>""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.title("🔐 會員中心")
