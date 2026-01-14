@@ -7,9 +7,12 @@ from datetime import datetime, timedelta
 # ==========================================
 if 'db_users' not in st.session_state:
     st.session_state['db_users'] = {
-        'admin': {'pwd': 'admin', 'expiry': '2099-12-31'},  # 管理員
-        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},  # 範例VIP
-        'user':  {'pwd': '123',   'expiry': '2023-01-01'}   # 範例過期者
+        # 🔥 你的管理員帳號 (已更新)
+        'BOSS07260304': {'pwd': '04036270BOSS', 'expiry': '2099-12-31'},
+        
+        # 測試用的會員 (不需要可以刪除或留著測試)
+        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},
+        'user':  {'pwd': '123',   'expiry': '2023-01-01'}
     }
 
 if 'db_posts' not in st.session_state:
@@ -46,7 +49,8 @@ def register_user(username, password):
     return True, "註冊成功！請登入並付款開通。"
 
 def check_subscription(username):
-    if username == 'admin': return True, "永久會員"
+    # 🔥 管理員判定：只要是這個帳號就是無敵
+    if username == 'BOSS07260304': return True, "永久會員"
     
     user_info = st.session_state['db_users'][username]
     expiry_str = user_info['expiry']
@@ -91,7 +95,6 @@ with st.sidebar:
     st.title("🔐 會員中心")
     
     if 'logged_in_user' not in st.session_state:
-        # 使用頁籤切換 登入/註冊
         tab_login, tab_register = st.tabs(["登入", "註冊新帳號"])
         
         with tab_login:
@@ -122,7 +125,6 @@ with st.sidebar:
                         st.error(msg)
 
     else:
-        # 已登入狀態
         curr_user = st.session_state['logged_in_user']
         is_active, expiry_date = check_subscription(curr_user)
         
@@ -143,7 +145,6 @@ with st.sidebar:
 # --- 主畫面內容 ---
 
 if 'logged_in_user' not in st.session_state:
-    # 未登入首頁
     st.title("🚀 權證主力戰情室")
     st.markdown("### 每日盤後，掌握大戶資金流向")
     
@@ -162,8 +163,8 @@ else:
     user = st.session_state['logged_in_user']
     is_vip, expiry = check_subscription(user)
 
-    # --- 管理員後台 ---
-    if user == 'admin':
+    # --- 管理員後台 (只有 BOSS 能看) ---
+    if user == 'BOSS07260304':
         st.subheader("🔧 管理員後台")
         
         tab1, tab2 = st.tabs(["發布文章", "會員管理"])
@@ -192,7 +193,7 @@ else:
             with col_a:
                 target_user = st.text_input("輸入會員帳號")
             with col_b:
-                st.write("") # 排版用
+                st.write("")
                 st.write("")
                 if st.button("加值 30 天"):
                     if add_days_to_user(target_user):
@@ -200,7 +201,6 @@ else:
                     else:
                         st.error("找不到此帳號，請確認對方是否已註冊。")
             
-            # 顯示所有會員 (方便你查看)
             st.write("📋 目前註冊會員列表：")
             st.json(st.session_state['db_users'])
 
