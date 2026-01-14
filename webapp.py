@@ -4,9 +4,10 @@ from datetime import datetime, timedelta
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
+import requests
 
 # ==========================================
-# 1. 雲端資料庫設定 & 連線功能 (Secrets)
+# 1. 雲端資料庫設定 & 連線功能
 # ==========================================
 
 SHEET_NAME = '會員系統資料庫'
@@ -14,7 +15,7 @@ OPAY_URL = "https://payment.opay.tw/Broadcaster/Donate/B3C827A2B2E3ADEDDAFCAA4B1
 
 @st.cache_resource
 def get_db_connection():
-    """連線到 Google Sheets (使用 Secrets)"""
+    """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     key_dict = json.loads(st.secrets["gcp_key"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
@@ -22,8 +23,52 @@ def get_db_connection():
     sheet = client.open(SHEET_NAME)
     return sheet
 
+def upload_image_to_drive(image_file):
+    """
+    自動將上傳的圖片轉存到 Google Drive 並回傳公開連結
+    """
+    if not image_file:
+        return ""
+    
+    try:
+        # 1. 取得權限 (每次上傳都重新取得最新 Token，避免過期)
+        scope = ['https://www.googleapis.com/auth/drive']
+        key_dict = json.loads(st.secrets["gcp_key"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
+        token = creds.get_access_token().access_token
+        
+        # 2. 上傳檔案 (POST 到 Google Drive API)
+        headers = {"Authorization": f"Bearer {token}"}
+        files = {
+            'metadata': (None, json.dumps({'name': image_file.name}), 'application/json'),
+            'file': (image_file.name, image_file, image_file.type)
+        }
+        response = requests.post(
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart",
+            headers=headers,
+            files=files
+        )
+        file_id = response.json().get('id')
+        
+        if not file_id:
+            return ""
+
+        # 3. 設定權限為「公開讀取」(讓會員看得到)
+        requests.post(
+            f"https://www.googleapis.com/drive/v3/files/{file_id}/permissions",
+            headers=headers,
+            json={"role": "reader", "type": "anyone"}
+        )
+        
+        # 4. 回傳可以直接顯示的連結
+        return f"https://drive.google.com/uc?export=view&id={file_id}"
+        
+    except Exception as e:
+        st.error(f"圖片上傳失敗: {e}")
+        return ""
+
 # ==========================================
-# 2. 核心功能函數 (保持不變)
+# 2. 核心功能函數
 # ==========================================
 
 def get_data_as_df(worksheet_name):
@@ -110,11 +155,10 @@ def add_new_post(title, content, img_url=""):
         return False
 
 # ==========================================
-# 3. 網站介面 (主要修改區)
+# 3. 網站介面
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
-# 只隱藏右上角選單和頁尾，不碰 Header，保持乾淨
 st.markdown("""
     <style>
         [data-testid="stToolbar"] {visibility: hidden; display: none;}
@@ -123,24 +167,15 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------------------------------
-# 邏輯：判斷是否已登入
-# ----------------------------------------------------
-
 if 'logged_in_user' not in st.session_state:
-    # === 尚未登入：顯示置中的登入/註冊卡片 ===
-    
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
     st.divider()
 
-    # 使用 columns 把內容擠到中間 (左空, 中間內容, 右空)
     col1, col2, col3 = st.columns([1, 2, 1])
 
     with col2:
-        # 這裡就是正中間的登入框
         st.info("🔒 請先登入或註冊以繼續")
-        
         tab_login, tab_register = st.tabs(["🔑 會員登入", "📝 免費註冊"])
         
         with tab_login:
@@ -170,23 +205,17 @@ if 'logged_in_user' not in st.session_state:
                         st.success(msg)
                     else:
                         st.error(msg)
-                        
-    # 下方顯示功能介紹
+    
     st.write("")
     st.write("")
     c1, c2 = st.columns(2)
-    with c1:
-        st.success("📊 **獨家籌碼表格**\n\n一眼看穿誰在買、誰在賣。")
-    with c2:
-        st.warning("🤖 **AI 深度點評**\n\n結合基本面與籌碼面的精闢分析。")
+    with c1: st.success("📊 **獨家籌碼表格**\n\n一眼看穿誰在買、誰在賣。")
+    with c2: st.warning("🤖 **AI 深度點評**\n\n結合基本面與籌碼面的精闢分析。")
 
 else:
-    # === 已經登入：顯示完整內容 ===
-    
     user = st.session_state['logged_in_user']
     is_vip, expiry = check_subscription(user)
     
-    # 頂部導覽列 (顯示使用者資訊 + 登出按鈕)
     top_col1, top_col2 = st.columns([4, 1])
     with top_col1:
         st.title("🚀 權證主力戰情室")
@@ -196,26 +225,38 @@ else:
         else:
             st.caption(f"⛔ 會員已過期 ({expiry})")
     with top_col2:
-        st.write("") # 佔位
+        st.write("")
         if st.button("登出系統", use_container_width=True):
             del st.session_state['logged_in_user']
             st.rerun()
             
     st.divider()
 
-    # --- 管理員後台 ---
+    # --- 管理員後台 (修改區：改為圖片上傳) ---
     if user == 'BOSS07260304':
         with st.expander("🔧 管理員後台 (點擊展開)", expanded=True):
             tab1, tab2 = st.tabs(["發布文章", "會員管理"])
             with tab1:
                 with st.form("post_form"):
+                    st.write("### 發布新戰情")
                     new_title = st.text_input("文章標題")
                     new_content = st.text_area("內容", height=200)
-                    new_img = st.text_input("圖片連結 (選填)")
-                    submitted = st.form_submit_button("發布")
+                    
+                    # 🔥 修改處：改成檔案上傳器
+                    uploaded_file = st.file_uploader("上傳圖片 (支援手機拍照)", type=['png', 'jpg', 'jpeg'])
+                    
+                    submitted = st.form_submit_button("發布文章")
+                    
                     if submitted:
-                        if add_new_post(new_title, new_content, new_img):
+                        # 如果有選圖片，就先上傳到 Drive 拿連結
+                        final_img_url = ""
+                        if uploaded_file:
+                            with st.spinner('正在上傳圖片到雲端...'):
+                                final_img_url = upload_image_to_drive(uploaded_file)
+                        
+                        if add_new_post(new_title, new_content, final_img_url):
                             st.success("發布成功！")
+            
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
                 if st.button("加值 30 天"):
@@ -235,13 +276,16 @@ else:
                 with st.container():
                     st.markdown(f"### {row['title']}")
                     st.caption(f"{row['date']}")
-                    if row['img']: st.image(row['img'])
+                    
+                    # 顯示圖片 (如果有)
+                    if row['img']: 
+                        st.image(row['img'])
+                    
                     st.write(row['content'])
                     st.divider()
         else:
             st.info("尚無文章")
     else:
-        # 過期畫面
         st.error("⛔ 您的會員權限尚未開通或已到期。")
         st.write("請付款後，等待管理員開通權限。")
         st.link_button("👉 前往歐付寶付款 ($188/月)", OPAY_URL, use_container_width=True)
