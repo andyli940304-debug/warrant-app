@@ -8,9 +8,9 @@ from datetime import datetime, timedelta
 if 'db_users' not in st.session_state:
     st.session_state['db_users'] = {
         # 格式: '帳號': {'pwd': '密碼', 'expiry': '到期日(YYYY-MM-DD)'}
-        'admin': {'pwd': 'admin', 'expiry': '2099-12-31'},  # 你自己 (管理員)
-        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},  # 測試用的 VIP
-        'user':  {'pwd': '123',   'expiry': '2023-01-01'}   # 測試用的過期會員 (用這個測試付款鈕)
+        'admin': {'pwd': 'admin', 'expiry': '2099-12-31'},  # 管理員
+        'vip':   {'pwd': '123',   'expiry': '2025-12-31'},  # 測試VIP
+        'user':  {'pwd': '123',   'expiry': '2023-01-01'}   # 測試過期會員
     }
 
 if 'db_posts' not in st.session_state:
@@ -38,7 +38,7 @@ def check_login(username, password):
 
 def check_subscription(username):
     """檢查會員是否過期"""
-    if username == 'admin': return True, "永久會員" # 管理員無敵
+    if username == 'admin': return True, "永久會員"
     
     user_info = st.session_state['db_users'][username]
     expiry_str = user_info['expiry']
@@ -57,7 +57,6 @@ def add_days_to_user(username, days=30):
         current_expiry = datetime.strptime(user_info['expiry'], "%Y-%m-%d").date()
         today = datetime.now().date()
         
-        # 如果已過期，從今天開始加；沒過期，從舊到期日往後加
         start_date = max(current_expiry, today)
         new_expiry = start_date + timedelta(days=days)
         
@@ -70,12 +69,22 @@ def add_days_to_user(username, days=30):
 # ==========================================
 st.set_page_config(page_title="權證主力戰情室", layout="wide", page_icon="📈")
 
+# 🔥🔥🔥【這裡就是隱藏選單的魔法代碼】🔥🔥🔥
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+# 🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥
+
 # --- 側邊欄：登入/登出區 ---
 with st.sidebar:
     st.title("🔐 會員中心")
     
     if 'logged_in_user' not in st.session_state:
-        # 未登入狀態
         st.info("請先登入以查看戰情室")
         user_input = st.text_input("帳號")
         pwd_input = st.text_input("密碼", type="password")
@@ -83,11 +92,10 @@ with st.sidebar:
         if st.button("登入"):
             if check_login(user_input, pwd_input):
                 st.session_state['logged_in_user'] = user_input
-                st.rerun() # 重新整理畫面
+                st.rerun()
             else:
                 st.error("帳號或密碼錯誤！")
     else:
-        # 已登入狀態
         curr_user = st.session_state['logged_in_user']
         is_active, expiry_date = check_subscription(curr_user)
         
@@ -98,7 +106,6 @@ with st.sidebar:
         else:
             st.error(f"⛔ 已過期：{expiry_date}")
             st.markdown("---")
-            # 🔥 側邊欄付款連結
             st.markdown(f"👉 **[點我續約 (歐付寶 $188)]({OPAY_URL})**")
             
         st.markdown("---")
@@ -123,7 +130,6 @@ if 'logged_in_user' not in st.session_state:
     st.write("🔒 **本站為會員制，請登入或訂閱後觀看。**")
     st.markdown("### 💰 訂閱方案：每月只要 NT$ 188")
     
-    # 🔥 首頁付款按鈕
     st.link_button("👉 立即註冊並訂閱", OPAY_URL)
 
 # 情況 B: 已登入 -> 檢查權限
@@ -131,7 +137,7 @@ else:
     user = st.session_state['logged_in_user']
     is_vip, expiry = check_subscription(user)
 
-    # --- 管理員後台 (只有帳號是 admin 才能看) ---
+    # --- 管理員後台 ---
     if user == 'admin':
         st.subheader("🔧 管理員後台")
         
@@ -165,31 +171,28 @@ else:
                     st.error("找不到此帳號")
         st.divider()
 
-    # --- VIP 內容區 (有付錢才看得到) ---
+    # --- VIP 內容區 ---
     if is_vip:
         st.title("📊 主力戰情日報")
         
-        # 顯示所有文章
         for post in st.session_state['db_posts']:
             with st.container():
                 st.markdown(f"### {post['title']}")
                 st.caption(f"發布時間: {post['date']}")
                 
-                # 如果有圖片就顯示
                 if post['img']:
                     st.image(post['img'])
                 
                 st.write(post['content'])
                 st.divider()
     
-    # --- 過期會員區 (看得到標題，點不開) ---
+    # --- 過期會員區 ---
     else:
         st.warning("⛔ 您的訂閱已到期，無法查看完整內容。")
         st.write("請續費以解鎖最新主力籌碼分析報告。")
-        
-        # 🔥 過期頁面付款按鈕
         st.link_button("👉 立即續約 (歐付寶 $188)", OPAY_URL)
         
         st.write("#### 🔒 最新文章列表 (VIP限定)")
         for post in st.session_state['db_posts']:
             st.info(f"🔒 {post['date']} | {post['title']}")
+            
