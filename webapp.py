@@ -18,11 +18,9 @@ def get_db_connection():
     """連線到 Google Sheets"""
     scope = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
     
-    # 🔥 修改：從 Secrets 讀取，而不是寫死在程式碼
-    # 這樣 GitHub 就不會報錯，駭客也看不到
+    # 從 Secrets 讀取
     if "gcp_key" in st.secrets:
         key_data = st.secrets["gcp_key"]
-        # 如果是字串就轉成字典，如果是字典就直接用
         if isinstance(key_data, str):
             key_dict = json.loads(key_data)
         else:
@@ -39,11 +37,10 @@ def get_db_connection():
 def upload_image_to_imgbb(image_file):
     if not image_file: return ""
     try:
-        # 🔥 修改：從 Secrets 讀取 ImgBB 金鑰
         if "imgbb_key" in st.secrets:
             api_key = st.secrets["imgbb_key"]
         else:
-            return "" # 沒金鑰就不上傳
+            return ""
             
         url = "https://api.imgbb.com/1/upload"
         payload = {"key": api_key}
@@ -70,7 +67,6 @@ def get_data_as_df(worksheet_name):
         return pd.DataFrame()
 
 def check_login(username, password):
-    # 🔥 修改：從 Secrets 讀取管理員帳密
     if "admin_username" in st.secrets:
         admin_user = st.secrets["admin_username"]
         admin_pwd = st.secrets["admin_password"]
@@ -100,7 +96,6 @@ def register_user(username, password):
         return False, f"連線錯誤: {e}"
 
 def check_subscription(username):
-    # 🔥 修改：從 Secrets 讀取管理員帳號
     if "admin_username" in st.secrets:
         if str(username) == str(st.secrets["admin_username"]): 
             return True, "永久會員 (管理員)"
@@ -162,17 +157,13 @@ if 'logged_in_user' not in st.session_state:
     st.markdown("<h1 style='text-align: center;'>🚀 權證主力戰情室</h1>", unsafe_allow_html=True)
     st.markdown("<p style='text-align: center;'>每日盤後籌碼分析 | 掌握大戶資金流向</p>", unsafe_allow_html=True)
     
-    # 法律免責聲明 (置頂)
     st.error("⚠️ **法律免責聲明**：本網站數據僅供學術研究參考，**絕不構成任何投資建議**。使用者應自行承擔所有投資風險，盈虧自負。")
-    
     st.divider()
 
     col1, col2, col3 = st.columns([1, 2, 1])
-
     with col2:
         st.info("🔒 請先登入或註冊以繼續")
         tab_login, tab_register = st.tabs(["🔑 會員登入", "📝 免費註冊"])
-        
         with tab_login:
             st.write("")
             user_input = st.text_input("帳號", key="login_user")
@@ -183,7 +174,6 @@ if 'logged_in_user' not in st.session_state:
                     st.rerun()
                 else:
                     st.error("帳號或密碼錯誤！")
-
         with tab_register:
             st.write("")
             new_user = st.text_input("設定帳號", key="reg_user")
@@ -200,7 +190,6 @@ if 'logged_in_user' not in st.session_state:
                         st.success(msg)
                     else:
                         st.error(msg)
-    
     st.write("")
     c1, c2 = st.columns(2)
     with c1: st.success("📊 **獨家籌碼表格**\n\n一眼看穿誰在買、誰在賣。")
@@ -223,9 +212,7 @@ else:
             del st.session_state['logged_in_user']
             st.rerun()
             
-    # 免責聲明 (置頂)
     st.warning("⚠️ **免責聲明**：本網站內容僅為資訊整理，**不構成投資建議**。盈虧自負。")
-
     st.divider()
 
     # --- 管理員後台 ---
@@ -257,18 +244,36 @@ else:
                             bar.empty()
                         if add_new_post(new_title, new_content, final_img_str):
                             st.success(f"發布成功！")
+            
+            # 🔥 這裡修復了：把按鈕邏輯拆開寫，不會報錯了
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
                 st.write("👇 加值天數：")
                 b0, b1, b2, b3 = st.columns(4)
                 with b0:
-                    if st.button("+1 天", use_container_width=True): add_days_to_user(target_user, 1) and st.success("OK")
+                    if st.button("+1 天", use_container_width=True):
+                        if add_days_to_user(target_user, 1):
+                            st.success("成功 +1 天")
+                        else:
+                            st.error("失敗")
                 with b1:
-                    if st.button("+30 天", use_container_width=True): add_days_to_user(target_user, 30) and st.success("OK")
+                    if st.button("+30 天", use_container_width=True):
+                        if add_days_to_user(target_user, 30):
+                            st.success("成功 +30 天")
+                        else:
+                            st.error("失敗")
                 with b2:
-                    if st.button("+60 天", use_container_width=True): add_days_to_user(target_user, 60) and st.success("OK")
+                    if st.button("+60 天", use_container_width=True):
+                        if add_days_to_user(target_user, 60):
+                            st.success("成功 +60 天")
+                        else:
+                            st.error("失敗")
                 with b3:
-                    if st.button("+90 天", use_container_width=True): add_days_to_user(target_user, 90) and st.success("OK")
+                    if st.button("+90 天", use_container_width=True):
+                        if add_days_to_user(target_user, 90):
+                            st.success("成功 +90 天")
+                        else:
+                            st.error("失敗")
                 st.dataframe(get_data_as_df('users'))
         st.divider()
 
