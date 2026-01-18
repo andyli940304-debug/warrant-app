@@ -5,6 +5,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import json
 import requests
+import streamlit.components.v1 as components  # 🔥 新增這個元件庫
 
 # ==========================================
 # 1. 雲端資料庫設定 & 連線功能
@@ -226,9 +227,11 @@ else:
             with tab1:
                 with st.form("post_form"):
                     st.write("### 發布新戰情")
+                    st.info("💡 提示：如果使用 Mark 63 生成的 HTML，直接將 HTML 原始碼貼在「內容」框中即可。")
                     new_title = st.text_input("文章標題")
-                    new_content = st.text_area("內容", height=200)
-                    uploaded_files = st.file_uploader("上傳圖片 (最多10張)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
+                    # 🔥 修改：增加高度，方便貼上大量 HTML 代碼
+                    new_content = st.text_area("內容 (支援 HTML 代碼或純文字)", height=300)
+                    uploaded_files = st.file_uploader("上傳圖片 (選填)", type=['png', 'jpg', 'jpeg'], accept_multiple_files=True)
                     submitted = st.form_submit_button("發布文章")
                     if submitted:
                         final_img_str = ""
@@ -245,7 +248,6 @@ else:
                         if add_new_post(new_title, new_content, final_img_str):
                             st.success(f"發布成功！")
             
-            # 🔥 這裡修復了：把按鈕邏輯拆開寫，不會報錯了
             with tab2:
                 target_user = st.text_input("輸入會員帳號")
                 st.write("👇 加值天數：")
@@ -277,7 +279,7 @@ else:
                 st.dataframe(get_data_as_df('users'))
         st.divider()
 
-    # --- VIP 內容區 ---
+    # --- VIP 內容區 (🔥 重點修改區) ---
     if is_vip:
         st.subheader("📊 主力戰情日報")
         df_posts = get_data_as_df('posts')
@@ -286,10 +288,22 @@ else:
                 with st.container():
                     st.markdown(f"### {row['title']}")
                     st.caption(f"{row['date']}")
+                    
+                    # 圖片顯示 (選填)
                     if row['img']:
                         if "," in str(row['img']): st.image(row['img'].split(","))
                         else: st.image(row['img'])
-                    st.write(row['content'])
+                    
+                    content = row['content']
+                    
+                    # 🔥 智慧判斷：如果是 HTML 程式碼 (包含 <div 或 <html)，就用 iframe 渲染
+                    if "<div" in content or "<html" in content or "<style>" in content:
+                        # height 設定高一點，並開啟捲軸，讓完整的卡片可以滑動閱讀
+                        components.html(content, height=600, scrolling=True)
+                    else:
+                        # 否則當作一般文字顯示
+                        st.write(content)
+                        
                     st.divider()
         else: st.info("尚無文章")
     else:
